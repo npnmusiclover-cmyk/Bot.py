@@ -10,7 +10,7 @@ import yt_dlp
 # ==========================================
 # CONFIGURATION & SECURED LINKS
 # ==========================================
-BOT_TOKEN = "YOUR_BOT_TOKEN_HERE"  # Apna Bot token yaha dalein
+BOT_TOKEN = "8926259485:AAGDFA_RiOeNYGjkR2HhyhmTOymUMs7iMAk"  # Apna Bot token yaha dalein
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # FORCE JOIN CHANNELS (Aapke channels ka username)
@@ -96,7 +96,7 @@ def send_welcome(message):
 
     welcome_text = (
         "🌟 *Welcome to the Premium Downloader Bot!*\n\n"
-        "I am an advanced downloader created for @BLACK_KNOWLEDGE_190. "
+        "I am an advanced downloader created for @PLUS_OFFICIAL01. "
         "Simply send me an Instagram Reel or Facebook Video link, and I will download it for you instantly!"
     )
     bot.send_message(message.chat.id, welcome_text, reply_markup=get_premium_welcome_markup(), parse_mode="Markdown")
