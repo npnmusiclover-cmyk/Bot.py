@@ -8,13 +8,13 @@ from flask import Flask
 import yt_dlp
 
 # ==========================================
-# CONFIGURATION & SECURED LINKS (Railway Optimized)
+# CONFIGURATION & SECURED LINKS
 # ==========================================
-# Ab yeh direct Railway ke Variables tab se Token uthayega
+# Railway ke Variables tab se Token load hoga
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# FORCE JOIN CHANNELS (Aapke channels ka username)
+# FORCE JOIN CHANNELS
 CHANNEL_1 = "@plus_official01"
 CHANNEL_2 = "@joinforfree110"
 
@@ -30,7 +30,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return "Bot is running beautifully with Force Join on Railway!"
+    return "Bot is running beautifully with Strict Force Join on Railway!"
 
 def run_server():
     port = int(os.environ.get("PORT", 10000))
@@ -42,29 +42,37 @@ def keep_alive():
     server_thread.start()
 
 # ==========================================
-# HELPER FUNCTIONS (Force Join Check)
+# HELPER FUNCTIONS (Strict Force Join Check)
 # ==========================================
 def is_user_subscribed(user_id):
-    """Checks if the user has joined both mandatory channels."""
+    """Checks if the user has strictly joined both mandatory channels."""
+    allowed = ['member', 'administrator', 'creator']
+    
+    # Check Channel 1
     try:
         status1 = bot.get_chat_member(CHANNEL_1, user_id).status
-        status2 = bot.get_chat_member(CHANNEL_2, user_id).status
-        
-        allowed = ['member', 'administrator', 'creator']
-        if status1 in allowed and status2 in allowed:
-            return True
+        if status1 not in allowed:
+            return False
+    except Exception:
+        # Agar user member nahi hai to API error degi, matlab subscribed nahi hai
         return False
-    except Exception as e:
-        print(f"Force Join Check Error: {e}")
-        # Agar bot channel me admin nahi hai ya koi error hai toh user ko block nahi karega crash se bachne ke liye
+        
+    # Check Channel 2
+    try:
+        status2 = bot.get_chat_member(CHANNEL_2, user_id).status
+        if status2 not in allowed:
+            return False
+    except Exception:
         return False
 
+    return True
+
 def send_force_join_message(chat_id):
-    """Sends the premium access denied / force join layout."""
+    """Sends the strict access denied / force join layout with verification button."""
     text = (
         "❌ *Access Denied!*\n\n"
         "You must subscribe to our official channels to use this bot. "
-        "Click the buttons below to join, then press **Verified 🔄**."
+        "Click the buttons below to join, then press **Verified 🔄** to unlock the bot."
     )
     markup = InlineKeyboardMarkup()
     markup.row(InlineKeyboardButton("📢 Join Channel 1", url="https://t.me/plus_official01"))
@@ -73,38 +81,28 @@ def send_force_join_message(chat_id):
     
     bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
 
-def get_premium_welcome_markup():
-    """Generates the main command layout."""
-    markup = InlineKeyboardMarkup()
-    btn_subscribe = InlineKeyboardButton("SUBSCRIBE CHANNEL", url=YT_LINK)
-    btn_tutorials = InlineKeyboardButton("ALL TUTORIALS", url=YT_LINK)
-    btn_contact = InlineKeyboardButton("CONTACT OWNER", url=SUPPORT_LINK)
-    markup.add(btn_subscribe)
-    markup.add(btn_tutorials)
-    markup.add(btn_contact)
-    return markup
-
 # ==========================================
 # TELEGRAM BOT HANDLERS
 # ==========================================
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    """Handles the /start command with Force Join Check."""
+    """Handles the /start command with strict verification."""
     if not is_user_subscribed(message.from_user.id):
         send_force_join_message(message.chat.id)
         return
 
     welcome_text = (
         "🌟 *Welcome to the Premium Downloader Bot!*\n\n"
-        "I am an advanced downloader created for @BLACK_KNOWLEDGE_190. "
+        "I am an advanced downloader created for @plus_official01.\n"
         "Simply send me an Instagram Reel or Facebook Video link, and I will download it for you instantly!"
     )
-    bot.send_message(message.chat.id, welcome_text, reply_markup=get_premium_welcome_markup(), parse_mode="Markdown")
+    # Buttons ko hata diya gaya hai rule ke mutabik, direct simple text display hoga
+    bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: call.data == "check_verify")
 def verify_callback(call):
-    """Handles the verification button click."""
+    """Handles the verification process for new users."""
     user_id = call.from_user.id
     chat_id = call.message.chat.id
     
@@ -115,16 +113,17 @@ def verify_callback(call):
             pass
         welcome_text = (
             "✅ *Verification Successful!*\n\n"
-            "Thank you for joining. I am created for @BLACK_KNOWLEDGE_190.\n"
+            "Thank you for joining Plus Official.\n"
             "Send me any Instagram Reel or Facebook Video link now!"
         )
-        bot.send_message(chat_id, welcome_text, reply_markup=get_premium_welcome_markup(), parse_mode="Markdown")
+        bot.send_message(chat_id, welcome_text, parse_mode="Markdown")
     else:
-        bot.answer_callback_query(call.id, "⚠️ You still haven't joined both channels!", show_alert=True)
+        # Agar user ne join nahi kiya to alert popup aayega
+        bot.answer_callback_query(call.id, "⚠️ You still haven't joined both channels! Please join first.", show_alert=True)
 
 @bot.message_handler(func=lambda message: message.text and 'http' in message.text)
 def handle_video_link(message):
-    """Handles incoming links with Force Join verification and UI progress."""
+    """Handles incoming links with strict block check and UI progress."""
     if not is_user_subscribed(message.from_user.id):
         send_force_join_message(message.chat.id)
         return
@@ -183,5 +182,5 @@ if __name__ == "__main__":
     print("Starting Keep-Alive Flask Server...")
     keep_alive()
     
-    print("Starting Telegram Bot...")
+    print("Starting Telegram Bot with Fixed Strict Force Join Logic...")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
