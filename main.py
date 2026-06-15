@@ -111,7 +111,7 @@ def verify_callback(call):
         bot.delete_message(chat_id, call.message.message_id)
         welcome_text = (
             "✅ *Verification Successful!*\n\n"
-            "Thank you for joining. I am created for @BLACK_KNOWLEDGE_190.\n"
+            "Thank you for joining. I am created for @PLUS_OFFICIAL01\n"
             "Send me any Instagram Reel or Facebook Video link now!"
         )
         bot.send_message(chat_id, welcome_text, reply_markup=get_premium_welcome_markup(), parse_mode="Markdown")
