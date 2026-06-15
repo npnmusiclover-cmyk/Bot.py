@@ -8,9 +8,10 @@ from flask import Flask
 import yt_dlp
 
 # ==========================================
-# CONFIGURATION & SECURED LINKS
+# CONFIGURATION & SECURED LINKS (Railway Optimized)
 # ==========================================
-BOT_TOKEN = "8926259485:AAGDFA_RiOeNYGjkR2HhyhmTOymUMs7iMAk"  # Apna Bot token yaha dalein
+# Ab yeh direct Railway ke Variables tab se Token uthayega
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # FORCE JOIN CHANNELS (Aapke channels ka username)
@@ -23,13 +24,13 @@ SUPPORT_LINK = base64.b64decode("aHR0cHM6Ly90Lm1lL0JMQUNLX0tub3dsZWRnZV8xOTA=").
 FINAL_CAPTION = "Downloaded Successfully! Power by: @plus_official01"
 
 # ==========================================
-# FLASK KEEP-ALIVE SERVER (For Render 24/7)
+# FLASK KEEP-ALIVE SERVER (For Railway 24/7)
 # ==========================================
 app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return "Bot is running beautifully with Force Join!"
+    return "Bot is running beautifully with Force Join on Railway!"
 
 def run_server():
     port = int(os.environ.get("PORT", 10000))
@@ -55,7 +56,7 @@ def is_user_subscribed(user_id):
         return False
     except Exception as e:
         print(f"Force Join Check Error: {e}")
-        # Agar bot channel me admin nahi hai to crash hone se bachane ke liye True return karega
+        # Agar bot channel me admin nahi hai ya koi error hai toh user ko block nahi karega crash se bachne ke liye
         return False
 
 def send_force_join_message(chat_id):
@@ -96,7 +97,7 @@ def send_welcome(message):
 
     welcome_text = (
         "🌟 *Welcome to the Premium Downloader Bot!*\n\n"
-        "I am an advanced downloader created for @PLUS_OFFICIAL01. "
+        "I am an advanced downloader created for @BLACK_KNOWLEDGE_190. "
         "Simply send me an Instagram Reel or Facebook Video link, and I will download it for you instantly!"
     )
     bot.send_message(message.chat.id, welcome_text, reply_markup=get_premium_welcome_markup(), parse_mode="Markdown")
@@ -108,10 +109,13 @@ def verify_callback(call):
     chat_id = call.message.chat.id
     
     if is_user_subscribed(user_id):
-        bot.delete_message(chat_id, call.message.message_id)
+        try:
+            bot.delete_message(chat_id, call.message.message_id)
+        except Exception:
+            pass
         welcome_text = (
             "✅ *Verification Successful!*\n\n"
-            "Thank you for joining. I am created for @PLUS_OFFICIAL01\n"
+            "Thank you for joining. I am created for @BLACK_KNOWLEDGE_190.\n"
             "Send me any Instagram Reel or Facebook Video link now!"
         )
         bot.send_message(chat_id, welcome_text, reply_markup=get_premium_welcome_markup(), parse_mode="Markdown")
@@ -154,10 +158,16 @@ def handle_video_link(message):
         with open(file_name, 'rb') as video_file:
             bot.send_video(chat_id, video_file, caption=FINAL_CAPTION)
             
-        bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
+        try:
+            bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
+        except Exception:
+            pass
 
     except Exception as e:
-        bot.edit_message_text(f"❌ Error during processing:\n`{str(e)}`", chat_id=chat_id, message_id=status_msg.message_id, parse_mode="Markdown")
+        try:
+            bot.edit_message_text(f"❌ Error during processing:\n`{str(e)}`", chat_id=chat_id, message_id=status_msg.message_id, parse_mode="Markdown")
+        except Exception:
+            bot.send_message(chat_id, f"❌ Error during processing:\n`{str(e)}`", parse_mode="Markdown")
         
     finally:
         if os.path.exists(file_name):
@@ -173,5 +183,5 @@ if __name__ == "__main__":
     print("Starting Keep-Alive Flask Server...")
     keep_alive()
     
-    print("Starting Telegram Bot with Force Join Logic...")
+    print("Starting Telegram Bot...")
     bot.infinity_polling(timeout=10, long_polling_timeout=5)
