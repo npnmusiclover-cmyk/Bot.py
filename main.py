@@ -10,7 +10,7 @@ import yt_dlp
 # ==========================================
 # CONFIGURATION & SECURED LINKS
 # ==========================================
-# Railway ke Variables tab se Token load hoga
+# Railway Variables tab se Token load hoga
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -21,7 +21,7 @@ CHANNEL_2 = "@joinforfree110"
 # Base64 Decoded Links (Mandatory Rule)
 YT_LINK = base64.b64decode("aHR0cHM6Ly95b3V0dWJlLmNvbS9AYmxhY2trbm93bGVkZ2VfMTkwP3NpPTlFd2tNUEdiLWxIUnpaZHE=").decode('utf-8')
 SUPPORT_LINK = base64.b64decode("aHR0cHM6Ly90Lm1lL0JMQUNLX0tub3dsZWRnZV8xOTA=").decode('utf-8')
-FINAL_CAPTION = "Downloaded Successfully! Power by: @plus_official01"
+FINAL_CAPTION = "⚡ *Downloaded Successfully!*\n\n🤝 *Powered by:* @plus_official01"
 
 # ==========================================
 # FLASK KEEP-ALIVE SERVER (For Railway 24/7)
@@ -30,7 +30,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return "Bot is running beautifully with Strict Force Join on Railway!"
+    return "Premium Bot is running 24/7 on Railway!"
 
 def run_server():
     port = int(os.environ.get("PORT", 10000))
@@ -50,34 +50,35 @@ def is_user_subscribed(user_id):
     
     # Check Channel 1
     try:
-        status1 = bot.get_chat_member(CHANNEL_1, user_id).status
-        if status1 not in allowed:
+        member1 = bot.get_chat_member(CHANNEL_1, user_id)
+        if member1.status not in allowed:
             return False
-    except Exception:
-        # Agar user member nahi hai to API error degi, matlab subscribed nahi hai
+    except Exception as e:
+        print(f"[LOG] Channel 1 check failed or user not found: {e}")
         return False
         
     # Check Channel 2
     try:
-        status2 = bot.get_chat_member(CHANNEL_2, user_id).status
-        if status2 not in allowed:
+        member2 = bot.get_chat_member(CHANNEL_2, user_id)
+        if member2.status not in allowed:
             return False
-    except Exception:
+    except Exception as e:
+        print(f"[LOG] Channel 2 check failed or user not found: {e}")
         return False
 
     return True
 
 def send_force_join_message(chat_id):
-    """Sends the strict access denied / force join layout with verification button."""
+    """Sends a premium access denied layout with verification button."""
     text = (
-        "❌ *Access Denied!*\n\n"
-        "You must subscribe to our official channels to use this bot. "
-        "Click the buttons below to join, then press **Verified 🔄** to unlock the bot."
+        "🔒 *PREMIUM ACCESS LOCKED*\n\n"
+        "Hey! To use this high-speed downloader, you must join our official updates channels first.\n\n"
+        "👇 *Join both channels below:* "
     )
     markup = InlineKeyboardMarkup()
-    markup.row(InlineKeyboardButton("📢 Join Channel 1", url="https://t.me/plus_official01"))
-    markup.row(InlineKeyboardButton("📢 Join Channel 2", url="https://t.me/joinforfree110"))
-    markup.row(InlineKeyboardButton("🔄 Verified / Try Again", callback_data="check_verify"))
+    markup.row(InlineKeyboardButton("📢 Plus Official", url="https://t.me/plus_official01"))
+    markup.row(InlineKeyboardButton("📢 Free Join", url="https://t.me/joinforfree110"))
+    markup.row(InlineKeyboardButton("🔄 Verify Access / Refresh", callback_data="check_verify"))
     
     bot.send_message(chat_id, text, reply_markup=markup, parse_mode="Markdown")
 
@@ -87,22 +88,24 @@ def send_force_join_message(chat_id):
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    """Handles the /start command with strict verification."""
+    """Handles the /start command with premium feel."""
     if not is_user_subscribed(message.from_user.id):
         send_force_join_message(message.chat.id)
         return
 
     welcome_text = (
-        "🌟 *Welcome to the Premium Downloader Bot!*\n\n"
-        "I am an advanced downloader created for @plus_official01.\n"
-        "Simply send me an Instagram Reel or Facebook Video link, and I will download it for you instantly!"
+        "✨ *WELCOME TO PREMIUM DOWNLOADER v2.0* ✨\n\n"
+        "Hello! I am an ultra-fast media downloader configured for *@plus_official01*.\n\n"
+        "📥 *Supported Platforms:*\n"
+        "• Instagram Reels & Videos\n"
+        "• Facebook Videos & FB Watch\n\n"
+        "🚀 *How to use:* Just copy any video link and send it directly to me!"
     )
-    # Buttons ko hata diya gaya hai rule ke mutabik, direct simple text display hoga
     bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: call.data == "check_verify")
 def verify_callback(call):
-    """Handles the verification process for new users."""
+    """Handles the verification process safely."""
     user_id = call.from_user.id
     chat_id = call.message.chat.id
     
@@ -111,51 +114,54 @@ def verify_callback(call):
             bot.delete_message(chat_id, call.message.message_id)
         except Exception:
             pass
+            
         welcome_text = (
-            "✅ *Verification Successful!*\n\n"
-            "Thank you for joining Plus Official.\n"
-            "Send me any Instagram Reel or Facebook Video link now!"
+            "✅ *ACCESS GRANTED!*\n\n"
+            "Thank you for verifying. Your premium access has been activated.\n\n"
+            "💬 *Send me any Instagram Reel or Facebook Video link now!*"
         )
         bot.send_message(chat_id, welcome_text, parse_mode="Markdown")
     else:
-        # Agar user ne join nahi kiya to alert popup aayega
-        bot.answer_callback_query(call.id, "⚠️ You still haven't joined both channels! Please join first.", show_alert=True)
+        bot.answer_callback_query(call.id, "⚠️ Access Denied! Please join both channels first.", show_alert=True)
 
 @bot.message_handler(func=lambda message: message.text and 'http' in message.text)
 def handle_video_link(message):
-    """Handles incoming links with strict block check and UI progress."""
+    """Handles links with high-fidelity progress animation."""
     if not is_user_subscribed(message.from_user.id):
         send_force_join_message(message.chat.id)
         return
 
     url = message.text.strip()
     if not any(domain in url for domain in ['instagram.com', 'facebook.com', 'fb.watch']):
-        bot.reply_to(message, "⚠️ Please send a valid Instagram or Facebook video link.")
+        bot.reply_to(message, "⚠️ *Invalid Link!* Please send a valid Instagram or Facebook link.", parse_mode="Markdown")
         return
 
     chat_id = message.chat.id
-    status_msg = bot.reply_to(message, "⏳ Analyzing...")
-    file_name = f"download_{chat_id}_{int(time.time())}.mp4"
+    status_msg = bot.reply_to(message, "⚡ *Analyzing URL... Please wait.*", parse_mode="Markdown")
+    file_name = f"premium_{chat_id}_{int(time.time())}.mp4"
     
     try:
-        time.sleep(0.5) 
-        bot.edit_message_text("🔄 Downloading (50%)...", chat_id=chat_id, message_id=status_msg.message_id)
+        # Step 2: Downloading Progress Layout
+        time.sleep(0.4) 
+        bot.edit_message_text("📥 *Downloading (50%)* \n`▓▓▓▓▓▓▓▓░░░░░░░░`", chat_id=chat_id, message_id=status_msg.message_id, parse_mode="Markdown")
         
         ydl_opts = {
             'outtmpl': file_name,
             'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
             'quiet': True,
             'no_warnings': True,
-            'merge_output_format': 'mp4'
+            'merge_output_format': 'mp4',
+            'cookiefile': 'cookies.txt' if os.path.exists('cookies.txt') else None # Server block se bachne ke liye
         }
         
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
             
-        bot.edit_message_text("🚀 Uploading (100%)...", chat_id=chat_id, message_id=status_msg.message_id)
+        # Step 3: Uploading Progress Layout
+        bot.edit_message_text("🚀 *Uploading to Telegram (100%)* \n`▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓`", chat_id=chat_id, message_id=status_msg.message_id, parse_mode="Markdown")
         
         with open(file_name, 'rb') as video_file:
-            bot.send_video(chat_id, video_file, caption=FINAL_CAPTION)
+            bot.send_video(chat_id, video_file, caption=FINAL_CAPTION, parse_mode="Markdown")
             
         try:
             bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
@@ -163,24 +169,30 @@ def handle_video_link(message):
             pass
 
     except Exception as e:
+        print(f"[ERROR] Download failed: {e}")
+        error_text = (
+            "❌ *Download Failed!*\n\n"
+            "Reason: This specific video might be private, restricted, or the link is temporarily unavailable."
+        )
         try:
-            bot.edit_message_text(f"❌ Error during processing:\n`{str(e)}`", chat_id=chat_id, message_id=status_msg.message_id, parse_mode="Markdown")
+            bot.edit_message_text(error_text, chat_id=chat_id, message_id=status_msg.message_id, parse_mode="Markdown")
         except Exception:
-            bot.send_message(chat_id, f"❌ Error during processing:\n`{str(e)}`", parse_mode="Markdown")
+            bot.send_message(chat_id, error_text, parse_mode="Markdown")
         
     finally:
+        # Mandatory Server Cleanup
         if os.path.exists(file_name):
             try:
                 os.remove(file_name)
-            except Exception as cleanup_error:
-                print(f"Failed to delete file {file_name}: {cleanup_error}")
+            except Exception:
+                pass
 
 # ==========================================
 # MAIN EXECUTION
 # ==========================================
 if __name__ == "__main__":
-    print("Starting Keep-Alive Flask Server...")
+    print("[SERVER] Starting Keep-Alive Flask Server...")
     keep_alive()
     
-    print("Starting Telegram Bot with Fixed Strict Force Join Logic...")
-    bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    print("[BOT] Launching Infinity Polling...")
+    bot.infinity_polling(timeout=20, long_polling_timeout=10)
