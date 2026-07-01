@@ -2,109 +2,123 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 import os
+import time
+import threading
 
+# --- CONFIGURATION ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 ADMIN_ID = int(os.environ.get('ADMIN_ID', 0))
-API_KEY = "DEMOFUCK"
+RC_API_KEY = "DEMOFUCK"
 
 bot = telebot.TeleBot(BOT_TOKEN)
-USERS_FILE = 'users.txt'
 
-# --- PREMIUM INLINE BUTTONS ---
+# Maintenance States
+MAINTENANCE = {"all": False, "rc": False, "number": False}
+
+# --- HELPERS ---
 def get_premium_markup():
     markup = InlineKeyboardMarkup()
-    btn1 = InlineKeyboardButton("💠 Join PLUS OFFICIAL", url="https://t.me/plus_official01")
-    btn2 = InlineKeyboardButton("💠 Join For Free 110", url="https://t.me/joinforfree110")
-    markup.add(btn1, btn2)
+    markup.add(InlineKeyboardButton("💠 Join PLUS OFFICIAL", url="https://t.me/plus_official01"))
+    markup.add(InlineKeyboardButton("💠 Join For Free 110", url="https://t.me/joinforfree110"))
     return markup
 
-# --- FORCE SUB BUTTONS ---
-def get_fsub_markup():
+def auto_delete(message):
+    time.sleep(30)
+    try: bot.delete_message(message.chat.id, message.message_id)
+    except: pass
+
+# --- ADMIN PANEL ---
+@bot.message_handler(commands=['admin'])
+def admin_panel(message):
+    if message.from_user.id != ADMIN_ID: return
     markup = InlineKeyboardMarkup(row_width=1)
     markup.add(
-        InlineKeyboardButton("💠 Join PLUS OFFICIAL", url="https://t.me/plus_official01"),
-        InlineKeyboardButton("💠 Join For Free 110", url="https://t.me/joinforfree110"),
-        InlineKeyboardButton("✅ Verify", callback_data="verify_fsub")
+        InlineKeyboardButton(f"🚨 Bot Maintenance: {'ON' if MAINTENANCE['all'] else 'OFF'}", callback_data="toggle_all"),
+        InlineKeyboardButton(f"🚗 RC Service: {'OFF' if MAINTENANCE['rc'] else 'ON'}", callback_data="toggle_rc"),
+        InlineKeyboardButton(f"📱 Mobile Service: {'OFF' if MAINTENANCE['number'] else 'ON'}", callback_data="toggle_number")
     )
-    return markup
+    bot.reply_to(message, "⚙️ <b>ADMIN CONTROL PANEL</b>", reply_markup=markup, parse_mode='HTML')
 
-# --- MEMBERSHIP CHECK ---
-def check_membership(user_id):
-    channels = ["@plus_official01", "@joinforfree110"]
-    for channel in channels:
-        try:
-            status = bot.get_chat_member(channel, user_id).status
-            if status in ['left', 'kicked']: return False
-        except: return False
-    return True
+@bot.callback_query_handler(func=lambda call: call.data.startswith("toggle_"))
+def toggle_service(call):
+    if call.data == "toggle_all": MAINTENANCE['all'] = not MAINTENANCE['all']
+    elif call.data == "toggle_rc": MAINTENANCE['rc'] = not MAINTENANCE['rc']
+    elif call.data == "toggle_number": MAINTENANCE['number'] = not MAINTENANCE['number']
+    bot.answer_callback_query(call.id, "✅ Status Updated!")
 
 # --- START COMMAND ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    welcome_text = (
-        "🟣 <b>𝗣𝗥𝗘𝗠𝗜𝗨𝗠 𝗩𝗘𝗛𝗜𝗖𝗟𝗘 𝗜𝗡𝗙𝗢 𝗕𝗢𝗧</b> 🟣\n\n"
-        "Welcome to the ultimate vehicle information system.\n"
-        "Kisi bhi gadi ki premium details nikalne ke liye uska number bhejiye.\n\n"
-        "𝗘𝘅𝗮𝗺𝗽𝗹𝗲: <code>DL10AB1234</code>"
-    )
-    bot.send_message(message.chat.id, welcome_text, parse_mode='HTML', reply_markup=get_premium_markup())
-
-# --- VERIFY CALLBACK ---
-@bot.callback_query_handler(func=lambda call: call.data == "verify_fsub")
-def verify_callback(call):
-    if check_membership(call.from_user.id):
-        bot.answer_callback_query(call.id, "✅ Verified! Ab aap details check kar sakte hain.")
-        bot.delete_message(call.message.chat.id, call.message.message_id)
-        bot.send_message(call.message.chat.id, "✅ Access granted. Ab gadi ka number bhejiye.")
+    if message.from_user.id == ADMIN_ID:
+        bot.send_message(message.chat.id, "👑 <b>ADMIN DASHBOARD</b>\nUse /admin for settings.", parse_mode='HTML')
     else:
-        bot.answer_callback_query(call.id, "❌ Pehle dono channel join karein!", show_alert=True)
+        text = "🟣 <b>PREMIUM INFO BOT</b> 🟣\n\nGadi ka number ya Mobile number bhejiye."
+        bot.send_message(message.chat.id, text, parse_mode='HTML', reply_markup=get_premium_markup())
 
-# --- VEHICLE INFO FETCHING ---
+# --- MAIN LOGIC ---
 @bot.message_handler(func=lambda message: True)
-def get_vehicle_info(message):
+def handle_message(message):
     if message.text.startswith('/'): return
     
-    # Force Sub Check
-    if not check_membership(message.from_user.id):
-        bot.reply_to(message, "⚠️ <b>Premium Access Restricted!</b>\n\nBot ka use karne ke liye, kripya niche diye gaye dono channels ko join karein aur 'Verify' par click karein.", 
-                     parse_mode="HTML", reply_markup=get_fsub_markup())
+    if MAINTENANCE['all']:
+        bot.reply_to(message, "🚧 <b>BOT UNDER MAINTENANCE</b> 🚧\n\nHum system update kar rahe hain. Kripya thodi der baad wapas aayein. 🙏", parse_mode='HTML')
         return
+
+    query = message.text.replace(" ", "")
+    loading = bot.reply_to(message, "⏳ <i>Fetching...</i>", parse_mode='HTML')
     
-    vehicle_number = message.text.replace(" ", "").upper()
-    loading_msg = bot.reply_to(message, "🟣 <i>Fetching Premium Data, please wait...</i>", parse_mode='HTML')
-    
-    url = f"https://anshsir-info.vercel.app/api/vehicle-info?rc={vehicle_number}&api_key={API_KEY}"
-    
-    try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()
+    # MOBILE INFO
+    if query.isdigit() and len(query) == 10:
+        if MAINTENANCE['number']:
+            bot.edit_message_text("❌ <b>Mobile Service Maintenance mein hai.</b>\nMaafi chahte hain! 🙏", message.chat.id, loading.message_id, parse_mode='HTML')
+            return
             
-            if "Owner Name" in data and data.get("Owner Name"):
-                clean_text = (
-                    "🟣 <b>𝗣𝗥𝗘𝗠𝗜𝗨𝗠 𝗩𝗘𝗛𝗜𝗖𝗟𝗘 𝗜𝗡𝗙𝗢𝗥𝗠𝗔𝗧𝗜𝗢𝗡</b> 🟣\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"👤 <b>𝗢𝘄𝗻𝗲𝗿 𝗡𝗮𝗺𝗲:</b> {data.get('Owner Name', 'N/A')}\n"
-                    f"🏍️ <b>𝗠𝗮𝗸𝗲𝗿/𝗠𝗼𝗱𝗲𝗹:</b> {data.get('Maker Model', 'N/A')} ({data.get('Model Name', 'N/A')})\n"
-                    f"⛽ <b>𝗙𝘂𝗲𝗹 𝗧𝘆𝗽𝗲:</b> {data.get('Fuel Type', 'N/A')} ({data.get('Fuel Norms', 'N/A')})\n"
-                    f"📅 <b>𝗥𝗲𝗴𝗶𝘀𝘁𝗿𝗮𝘁𝗶𝗼𝗻 𝗗𝗮𝘁𝗲:</b> {data.get('Registration Date', 'N/A')}\n"
-                    f"🏛️ <b>𝗥𝗧𝗢:</b> {data.get('Registered RTO', 'N/A')} ({data.get('City Name', 'N/A')})\n"
-                    f"🛡️ <b>𝗜𝗻𝘀𝘂𝗿𝗮𝗻𝗰𝗲 𝗨𝗽𝘁𝗼:</b> {data.get('Insurance Upto', 'N/A')} ({data.get('Insurance Company', 'N/A')})\n"
-                    f"✅ <b>𝗙𝗶𝘁𝗻𝗲𝘀𝘀 𝗨𝗽𝘁𝗼:</b> {data.get('Fitness Upto', 'N/A')}\n"
-                    f"📝 <b>𝗣𝗨𝗖 𝗨𝗽𝘁𝗼:</b> {data.get('PUC Upto', 'N/A')}\n"
-                    f"🏦 <b>𝗙𝗶𝗻𝗮𝗻𝗰𝗶𝗲𝗿:</b> {data.get('Financier Name', 'N/A')}\n"
-                    f"📍 <b>𝗔𝗱𝗱𝗿𝗲𝘀𝘀:</b> {data.get('Address', 'N/A')}\n"
-                    "━━━━━━━━━━━━━━━━━━━━━━\n"
-                    "⚡ <i>𝗣𝗼𝘄𝗲𝗿𝗲𝗱 𝗕𝘆 𝗣𝗟𝗨𝗦 𝗣𝗥𝗢</i>"
-                )
-                bot.edit_message_text(chat_id=message.chat.id, message_id=loading_msg.message_id, text=clean_text, parse_mode='HTML', reply_markup=get_premium_markup())
-            else:
-                bot.edit_message_text("❌ <b>Data not found.</b> Kripya sahi RC number bhejiye ya thodi der baad try karein.", chat_id=message.chat.id, message_id=loading_msg.message_id, parse_mode='HTML')
-        else:
-             bot.edit_message_text("❌ <b>Server error.</b> API limit ya technical issue.", chat_id=message.chat.id, message_id=loading_msg.message_id, parse_mode='HTML')
-             
-    except Exception as e:
-        bot.edit_message_text("⚠️ <b>Error fetching details.</b> Try another vehicle number.", chat_id=message.chat.id, message_id=loading_msg.message_id, parse_mode='HTML')
+        data = requests.get(f"https://sher-osint-india-num-info.vercel.app/api?number={query}").json()
+        if data.get("success"):
+            d = data["number_detail"]
+            res = (f"🟣 <b>MOBILE INFO</b> 🟣\n\n"
+                   f"👤 <b>Name:</b> {d.get('name')}\n"
+                   f"👨‍👧‍👦 <b>Father:</b> {d.get('father_name')}\n"
+                   f"📞 <b>Phone:</b> {query}\n"
+                   f"📧 <b>Email:</b> {d.get('email')}\n"
+                   f"📡 <b>Operator:</b> {d.get('operator')}\n"
+                   f"📍 <b>Circle:</b> {d.get('circle')}\n"
+                   f"🏘️ <b>Village/City:</b> {d.get('village_city')}\n"
+                   f"🗺️ <b>District:</b> {d.get('district')}\n"
+                   f"📍 <b>State:</b> {d.get('state')}\n"
+                   f"📍 <b>Landmark:</b> {d.get('landmark')}\n"
+                   f"📮 <b>Pincode:</b> {d.get('pincode')}\n"
+                   f"🏠 <b>Address:</b> {d.get('full_address')}")
+        else: res = "🔍 <b>Oops! Data Not Found</b>\n\nIs mobile number ki details nahi mil saki. Kripya check karein. 🙏"
+    
+    # RC INFO
+    else:
+        if MAINTENANCE['rc']:
+            bot.edit_message_text("❌ <b>RC Service Maintenance mein hai.</b>\nMaafi chahte hain! ✨", message.chat.id, loading.message_id, parse_mode='HTML')
+            return
+            
+        data = requests.get(f"https://anshsir-info.vercel.app/api/vehicle-info?rc={query}&api_key={RC_API_KEY}").json()
+        if "Owner Name" in data:
+            res = (f"🟣 <b>VEHICLE INFO</b> 🟣\n\n"
+                   f"👤 <b>Owner:</b> {data.get('Owner Name')}\n"
+                   f"👔 <b>Father:</b> {data.get('Father\'s Name')}\n"
+                   f"📞 <b>Phone:</b> {data.get('Phone')}\n"
+                   f"🏍️ <b>Maker:</b> {data.get('Maker Model')}\n"
+                   f"🏗️ <b>Model:</b> {data.get('Model Name')}\n"
+                   f"⛽ <b>Fuel:</b> {data.get('Fuel Type')} ({data.get('Fuel Norms')})\n"
+                   f"📅 <b>Reg Date:</b> {data.get('Registration Date')}\n"
+                   f"🏛️ <b>RTO:</b> {data.get('Registered RTO')} ({data.get('City Name')})\n"
+                   f"🛡️ <b>Insurance:</b> {data.get('Insurance Upto')} ({data.get('Insurance Company')})\n"
+                   f"✅ <b>Fitness:</b> {data.get('Fitness Upto')}\n"
+                   f"📝 <b>PUC:</b> {data.get('PUC Upto')}\n"
+                   f"🏦 <b>Financier:</b> {data.get('Financier Name')}\n"
+                   f"📍 <b>Address:</b> {data.get('Address')}\n"
+                   f"🔢 <b>Serial:</b> {data.get('Owner Serial No')}\n"
+                   f"📂 <b>Class:</b> {data.get('Vehicle Class')}")
+        else: res = "🔍 <b>Vehicle Details Not Found</b>\n\nIs gadi ka record nahi mila. Kripya sahi number check karein. ✨"
+
+    msg = bot.edit_message_text(res, message.chat.id, loading.message_id, parse_mode='HTML', reply_markup=get_premium_markup())
+    threading.Thread(target=auto_delete, args=(msg,)).start()
 
 print("🟣 Premium Bot is live...")
 bot.infinity_polling()
