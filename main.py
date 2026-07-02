@@ -4,6 +4,7 @@ import requests
 import os
 import time
 import threading
+import json
 
 # --- CONFIGURATION ---
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
@@ -18,6 +19,27 @@ CHANNEL_2 = "@joinforfree110"
 
 # Maintenance States
 MAINTENANCE = {"all": False, "rc": False, "number": False}
+
+# Database File for Users
+USERS_FILE = "users.json"
+
+# --- USER DATABASE HELPERS ---
+def load_users():
+    if os.path.exists(USERS_FILE):
+        with open(USERS_FILE, 'r') as f:
+            try: return json.load(f)
+            except: return {}
+    return {}
+
+def save_user(user_id, name, username):
+    users = load_users()
+    uid_str = str(user_id)
+    if uid_str not in users:
+        users[uid_str] = {"name": name, "username": username}
+        with open(USERS_FILE, 'w') as f:
+            json.dump(users, f)
+        return True # Returns True if it's a new user
+    return False
 
 # --- HELPERS ---
 def is_member(user_id):
@@ -55,17 +77,64 @@ def auto_delete(message):
     try: bot.delete_message(message.chat.id, message.message_id)
     except: pass
 
-# --- ADMIN PANEL ---
+# --- ADMIN PANEL & COMMANDS ---
 @bot.message_handler(commands=['admin'])
 def admin_panel(message):
     if message.from_user.id != ADMIN_ID: return
+    users = load_users()
+    total_users = len(users)
+    
     markup = InlineKeyboardMarkup(row_width=1)
     markup.add(
         InlineKeyboardButton(f"🚨 Bot Maintenance: {'ON' if MAINTENANCE['all'] else 'OFF'}", callback_data="toggle_all"),
         InlineKeyboardButton(f"🚗 RC Service: {'OFF' if MAINTENANCE['rc'] else 'ON'}", callback_data="toggle_rc"),
-        InlineKeyboardButton(f"📱 Mobile Service: {'OFF' if MAINTENANCE['number'] else 'ON'}", callback_data="toggle_number")
+        InlineKeyboardButton(f"📱 Mobile Service: {'OFF' if MAINTENANCE['number'] else 'ON'}", callback_data="toggle_number"),
+        InlineKeyboardButton(f"👥 Total Users: {total_users}", callback_data="ignore")
     )
-    bot.reply_to(message, "⚙️ <b>ADMIN CONTROL PANEL</b>", reply_markup=markup, parse_mode='HTML')
+    
+    text = (
+        "⚙️ <b>ADMIN CONTROL PANEL</b>\n\n"
+        "<b>Admin Commands:</b>\n"
+        "🔹 /admin - Open this panel\n"
+        "🔹 /userlist - Get full list of users\n"
+        "🔹 /searchuser [Name/ID] - Find specific user\n\n"
+        "📢 <b>Broadcast Trick:</b> Aap bot me direct koi bhi message, photo ya video send karenge toh wo automatic sabhi users ko broadcast ho jayega (bina kisi command ke)."
+    )
+    bot.reply_to(message, text, reply_markup=markup, parse_mode='HTML')
+
+@bot.message_handler(commands=['userlist'])
+def show_userlist(message):
+    if message.from_user.id != ADMIN_ID: return
+    users = load_users()
+    if not users:
+        bot.reply_to(message, "❌ Abhi tak koi user nahi hai.")
+        return
+    
+    text = "👥 <b>ALL USERS LIST</b>\n\n"
+    for uid, data in users.items():
+        text += f"👤 <b>{data['name']}</b> (@{data['username']}) - <code>{uid}</code>\n"
+    
+    send_long_message(message.chat.id, text)
+
+@bot.message_handler(commands=['searchuser'])
+def search_user(message):
+    if message.from_user.id != ADMIN_ID: return
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "Kripya name ya ID dalein.\nExample: <code>/searchuser Pawan</code>", parse_mode='HTML')
+        return
+    
+    query = parts[1].lower()
+    users = load_users()
+    results = ""
+    for uid, data in users.items():
+        if query in uid or query in data['name'].lower() or query in data['username'].lower():
+            results += f"👤 <b>{data['name']}</b> (@{data['username']}) - <code>{uid}</code>\n"
+    
+    if results:
+        send_long_message(message.chat.id, f"🔍 <b>SEARCH RESULTS</b>\n\n{results}")
+    else:
+        bot.reply_to(message, "❌ Koi user match nahi hua.")
 
 @bot.callback_query_handler(func=lambda call: call.data == "verify_join")
 def verify_join(call):
@@ -85,14 +154,30 @@ def toggle_service(call):
 # --- START COMMAND ---
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    if message.from_user.id == ADMIN_ID:
-        bot.send_message(message.chat.id, "👑 <b>ADMIN DASHBOARD</b>\nUse /admin for settings.", parse_mode='HTML')
+    user_id = message.from_user.id
+    name = message.from_user.first_name
+    username = message.from_user.username or "No Username"
+    
+    # Save user and notify admin if new
+    is_new = save_user(user_id, name, username)
+    if is_new:
+        try: bot.send_message(ADMIN_ID, f"🔔 <b>NEW USER ALERT</b>\n\n👤 <b>Name:</b> {name}\n🔗 <b>Username:</b> @{username}\n🆔 <b>ID:</b> <code>{user_id}</code>", parse_mode='HTML')
+        except: pass
+
+    if user_id == ADMIN_ID:
+        bot.send_message(message.chat.id, "👑 <b>ADMIN DASHBOARD</b>\nUse /admin for settings and features.", parse_mode='HTML')
     else:
-        if is_member(message.from_user.id):
+        if is_member(user_id):
             text = (
-                "🟣 <b>PREMIUM INFO BOT</b> 🟣\n\n"
-                "Gadi ka number check karne ke liye: <code>/rc MP09XX0000</code>\n"
-                "Mobile number check karne ke liye: <code>/num 9876543210</code>"
+                "🌟 <b>WELCOME TO PREMIUM INFO BOT</b> 🌟\n\n"
+                "Aapka swagat hai! Yahan aap kisi bhi gadi ya mobile number ki details nikal sakte hain.\n\n"
+                "🛠 <b>BOT COMMANDS:</b>\n"
+                "🔹 /start - Bot ko restart karne ke liye\n"
+                "🔹 /rc <code>[Gadi Number]</code> - RC details nikalne ke liye\n"
+                "🔹 /num <code>[Mobile Number]</code> - Mobile details nikalne ke liye\n\n"
+                "📌 <i>Example:</i>\n"
+                "👉 <code>/rc MP09XX0000</code>\n"
+                "👉 <code>/num 9876543210</code>"
             )
             bot.send_message(message.chat.id, text, parse_mode='HTML', reply_markup=get_premium_markup())
         else:
@@ -101,7 +186,6 @@ def send_welcome(message):
 # --- MOBILE LOGIC (/num) ---
 @bot.message_handler(commands=['num'])
 def handle_num(message):
-    # Persistent Channel Check (Left verification)
     if not is_member(message.from_user.id):
         bot.reply_to(message, "⚠️ <b>Access Denied!</b>\nAapne channel leave kar diya hai. Kripya firse join karke Verify karein.", reply_markup=get_join_markup(), parse_mode='HTML')
         return
@@ -155,7 +239,6 @@ def handle_num(message):
 # --- RC LOGIC (/rc) ---
 @bot.message_handler(commands=['rc'])
 def handle_rc(message):
-    # Persistent Channel Check (Left verification)
     if not is_member(message.from_user.id):
         bot.reply_to(message, "⚠️ <b>Access Denied!</b>\nAapne channel leave kar diya hai. Kripya firse join karke Verify karein.", reply_markup=get_join_markup(), parse_mode='HTML')
         return
@@ -202,6 +285,34 @@ def handle_rc(message):
     msg = send_long_message(message.chat.id, res)
     if msg: 
         threading.Thread(target=auto_delete, args=(msg,)).start()
+
+# --- ADMIN BROADCAST & UNKNOWN COMMAND CATCHER ---
+@bot.message_handler(func=lambda message: True, content_types=['text', 'photo', 'video', 'document', 'audio', 'voice', 'animation', 'sticker'])
+def catch_all(message):
+    # Agar message Admin se aaya hai
+    if message.from_user.id == ADMIN_ID:
+        if message.text and message.text.startswith('/'):
+            return # Ignore wrong commands sent by admin
+            
+        users = load_users()
+        success = 0
+        failed = 0
+        
+        msg = bot.reply_to(message, "⏳ <i>Broadcast started...</i>", parse_mode='HTML')
+        
+        for uid_str in users.keys():
+            try:
+                bot.copy_message(chat_id=int(uid_str), from_chat_id=message.chat.id, message_id=message.message_id)
+                success += 1
+                time.sleep(0.05) # Anti-Spam Limit
+            except:
+                failed += 1
+                
+        bot.edit_message_text(f"✅ <b>Broadcast Completed!</b>\n\n📨 <b>Sent:</b> {success}\n❌ <b>Failed:</b> {failed}", message.chat.id, msg.message_id, parse_mode='HTML')
+    
+    # Agar message normal user ne send kiya (jo ki command nahi hai)
+    else:
+        bot.reply_to(message, "❌ Invalid Input!\n\nKripya commands ka use karein:\n👉 <code>/rc [Gadi Number]</code>\n👉 <code>/num [Mobile Number]</code>", parse_mode='HTML')
 
 print("🟣 Premium Bot is live...")
 bot.infinity_polling()
