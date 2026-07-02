@@ -89,34 +89,41 @@ def send_welcome(message):
         bot.send_message(message.chat.id, "👑 <b>ADMIN DASHBOARD</b>\nUse /admin for settings.", parse_mode='HTML')
     else:
         if is_member(message.from_user.id):
-            text = "🟣 <b>PREMIUM INFO BOT</b> 🟣\n\nGadi ka number ya Mobile number bhejiye."
+            text = (
+                "🟣 <b>PREMIUM INFO BOT</b> 🟣\n\n"
+                "Gadi ka number check karne ke liye: <code>/rc MP09XX0000</code>\n"
+                "Mobile number check karne ke liye: <code>/num 9876543210</code>"
+            )
             bot.send_message(message.chat.id, text, parse_mode='HTML', reply_markup=get_premium_markup())
         else:
             bot.send_message(message.chat.id, "⚠️ <b>ACCESS DENIED</b>\n\nBot use karne ke liye pehle niche diye gaye channels join karein.", parse_mode='HTML', reply_markup=get_join_markup())
 
-# --- MAIN LOGIC ---
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
-    if message.text.startswith('/'): return
-    
+# --- MOBILE LOGIC (/num) ---
+@bot.message_handler(commands=['num'])
+def handle_num(message):
     # Persistent Channel Check (Left verification)
     if not is_member(message.from_user.id):
         bot.reply_to(message, "⚠️ <b>Access Denied!</b>\nAapne channel leave kar diya hai. Kripya firse join karke Verify karein.", reply_markup=get_join_markup(), parse_mode='HTML')
         return
         
-    if MAINTENANCE['all']:
-        bot.reply_to(message, "🚧 <b>BOT UNDER MAINTENANCE</b> 🚧\n\nHum system update kar rahe hain. Kripya thodi der baad wapas aayein. 🙏", parse_mode='HTML')
+    if MAINTENANCE['all'] or MAINTENANCE['number']:
+        bot.reply_to(message, "🚧 <b>BOT/SERVICE UNDER MAINTENANCE</b> 🚧\n\nHum system update kar rahe hain. Kripya thodi der baad wapas aayein. 🙏", parse_mode='HTML')
         return
 
-    query = message.text.replace(" ", "")
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "Kripya mobile number dalein.\nUdaharan: <code>/num 9876543210</code>", parse_mode='HTML')
+        return
+        
+    query = parts[1].replace(" ", "")
+    
+    if not (query.isdigit() and len(query) == 10):
+        bot.reply_to(message, "❌ Invalid Mobile Number! Kripya 10 anko ka number dalein.", parse_mode='HTML')
+        return
+
     loading = bot.reply_to(message, "⏳ <i>Fetching...</i>", parse_mode='HTML')
     
-    # MOBILE INFO
-    if query.isdigit() and len(query) == 10:
-        if MAINTENANCE['number']:
-            bot.edit_message_text("❌ <b>Mobile Service Maintenance mein hai.</b>\nMaafi chahte hain! 🙏", message.chat.id, loading.message_id, parse_mode='HTML')
-            return
-            
+    try:
         data = requests.get(f"https://sher-osint-india-num-info.vercel.app/api?number={query}").json()
         if data.get("success"):
             d = data["number_detail"]
@@ -133,14 +140,39 @@ def handle_message(message):
                    f"📍 <b>Landmark:</b> {d.get('landmark')}\n"
                    f"📮 <b>Pincode:</b> {d.get('pincode')}\n"
                    f"🏠 <b>Address:</b> {d.get('full_address')}")
-        else: res = "🔍 <b>Oops! Data Not Found</b>\n\nIs mobile number ki details nahi mil saki. Kripya check karein. 🙏"
+        else: 
+            res = "🔍 <b>Oops! Data Not Found</b>\n\nIs mobile number ki details nahi mil saki. Kripya check karein. 🙏"
+    except:
+        res = "❌ API Error! Baad me try karein."
+
+    try: bot.delete_message(message.chat.id, loading.message_id)
+    except: pass
+
+    msg = send_long_message(message.chat.id, res)
+    if msg: 
+        threading.Thread(target=auto_delete, args=(msg,)).start()
+
+# --- RC LOGIC (/rc) ---
+@bot.message_handler(commands=['rc'])
+def handle_rc(message):
+    # Persistent Channel Check (Left verification)
+    if not is_member(message.from_user.id):
+        bot.reply_to(message, "⚠️ <b>Access Denied!</b>\nAapne channel leave kar diya hai. Kripya firse join karke Verify karein.", reply_markup=get_join_markup(), parse_mode='HTML')
+        return
+        
+    if MAINTENANCE['all'] or MAINTENANCE['rc']:
+        bot.reply_to(message, "🚧 <b>BOT/SERVICE UNDER MAINTENANCE</b> 🚧\n\nHum system update kar rahe hain. Kripya thodi der baad wapas aayein. 🙏", parse_mode='HTML')
+        return
+
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "Kripya gadi number dalein.\nUdaharan: <code>/rc MP09XX0000</code>", parse_mode='HTML')
+        return
+        
+    query = parts[1].replace(" ", "")
+    loading = bot.reply_to(message, "⏳ <i>Fetching...</i>", parse_mode='HTML')
     
-    # RC INFO
-    else:
-        if MAINTENANCE['rc']:
-            bot.edit_message_text("❌ <b>RC Service Maintenance mein hai.</b>\nMaafi chahte hain! ✨", message.chat.id, loading.message_id, parse_mode='HTML')
-            return
-            
+    try:
         data = requests.get(f"https://anshsir-info.vercel.app/api/vehicle-info?rc={query}&api_key={RC_API_KEY}").json()
         if "Owner Name" in data:
             res = (f"🟣 <b>VEHICLE INFO</b> 🟣\n\n"
@@ -159,7 +191,10 @@ def handle_message(message):
                    f"📍 <b>Address:</b> {data.get('Address')}\n"
                    f"🔢 <b>Serial:</b> {data.get('Owner Serial No')}\n"
                    f"📂 <b>Class:</b> {data.get('Vehicle Class')}")
-        else: res = "🔍 <b>Vehicle Details Not Found</b>\n\nIs gadi ka record nahi mila. Kripya sahi number check karein. ✨"
+        else: 
+            res = "🔍 <b>Vehicle Details Not Found</b>\n\nIs gadi ka record nahi mila. Kripya sahi number check karein. ✨"
+    except:
+        res = "❌ API Error! Baad me try karein."
 
     try: bot.delete_message(message.chat.id, loading.message_id)
     except: pass
